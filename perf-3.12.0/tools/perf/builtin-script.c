@@ -42,6 +42,7 @@ enum perf_output_field {
 	PERF_OUTPUT_DSO             = 1U << 9,
 	PERF_OUTPUT_ADDR            = 1U << 10,
 	PERF_OUTPUT_SYMOFFSET       = 1U << 11,
+	PERF_OUTPUT_PERIOD          = 1U << 12,
 };
 
 struct output_option {
@@ -60,6 +61,7 @@ struct output_option {
 	{.str = "dso",   .field = PERF_OUTPUT_DSO},
 	{.str = "addr",  .field = PERF_OUTPUT_ADDR},
 	{.str = "symoff", .field = PERF_OUTPUT_SYMOFFSET},
+	{.str = "period", .field = PERF_OUTPUT_PERIOD},
 };
 
 /* default set to maintain compatibility with current format */
@@ -77,7 +79,7 @@ static struct {
 		.fields = PERF_OUTPUT_COMM | PERF_OUTPUT_TID |
 			      PERF_OUTPUT_CPU | PERF_OUTPUT_TIME |
 			      PERF_OUTPUT_EVNAME | PERF_OUTPUT_IP |
-				  PERF_OUTPUT_SYM | PERF_OUTPUT_DSO,
+				  PERF_OUTPUT_SYM | PERF_OUTPUT_DSO | PERF_OUTPUT_PERIOD,
 
 		.invalid_fields = PERF_OUTPUT_TRACE,
 	},
@@ -88,7 +90,7 @@ static struct {
 		.fields = PERF_OUTPUT_COMM | PERF_OUTPUT_TID |
 			      PERF_OUTPUT_CPU | PERF_OUTPUT_TIME |
 			      PERF_OUTPUT_EVNAME | PERF_OUTPUT_IP |
-				  PERF_OUTPUT_SYM | PERF_OUTPUT_DSO,
+				  PERF_OUTPUT_SYM | PERF_OUTPUT_DSO | PERF_OUTPUT_PERIOD,
 
 		.invalid_fields = PERF_OUTPUT_TRACE,
 	},
@@ -290,25 +292,25 @@ static void print_sample_start(struct perf_sample *sample,
 
 	if (PRINT_FIELD(COMM)) {
 		if (latency_format)
-			printf("%8.8s ", thread->comm);
+			printf("%8.8s\t", thread->comm);
 		else if (PRINT_FIELD(IP) && symbol_conf.use_callchain)
-			printf("%s ", thread->comm);
+			printf("%s\t", thread->comm);
 		else
-			printf("%16s ", thread->comm);
+			printf("%16s\t", thread->comm);
 	}
 
 	if (PRINT_FIELD(PID) && PRINT_FIELD(TID))
-		printf("%5d/%-5d ", sample->pid, sample->tid);
+		printf("%5d/%-5d\t", sample->pid, sample->tid);
 	else if (PRINT_FIELD(PID))
-		printf("%5d ", sample->pid);
+		printf("%5d\t", sample->pid);
 	else if (PRINT_FIELD(TID))
-		printf("%5d ", sample->tid);
+		printf("%5d\t", sample->tid);
 
 	if (PRINT_FIELD(CPU)) {
 		if (latency_format)
-			printf("%3d ", sample->cpu);
+			printf("%3d\t", sample->cpu);
 		else
-			printf("[%03d] ", sample->cpu);
+			printf("[%03d]\t", sample->cpu);
 	}
 
 	if (PRINT_FIELD(TIME)) {
@@ -316,12 +318,16 @@ static void print_sample_start(struct perf_sample *sample,
 		secs = nsecs / NSECS_PER_SEC;
 		nsecs -= secs * NSECS_PER_SEC;
 		usecs = nsecs / NSECS_PER_USEC;
-		printf("%5lu.%06lu: ", secs, usecs);
+		printf("%5lu.%06lu:\t", secs, usecs);
 	}
 
 	if (PRINT_FIELD(EVNAME)) {
 		evname = perf_evsel__name(evsel);
 		printf("%s: ", evname ? evname : "[unknown]");
+	}
+
+	if (PRINT_FIELD(PERIOD)) {
+		printf("%lu\t", sample->period);
 	}
 }
 
@@ -359,6 +365,10 @@ static void print_sample_addr(union perf_event *event,
 
 	if (!sample_addr_correlates_sym(attr))
 		return;
+
+	// vmiura: HACK - resolve callchain on top level process thread.
+	if (sample->pid != sample->tid)
+		thread = machine__findnew_thread(machine, sample->pid, sample->pid);
 
 	thread__find_addr_map(thread, machine, cpumode, MAP__FUNCTION,
 			      sample->addr, &al);
