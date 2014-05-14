@@ -323,7 +323,7 @@ static void print_sample_start(struct perf_sample *sample,
 
 	if (PRINT_FIELD(EVNAME)) {
 		evname = perf_evsel__name(evsel);
-		printf("%s: ", evname ? evname : "[unknown]");
+		printf("%s:\t", evname ? evname : "[unknown]");
 	}
 
 	if (PRINT_FIELD(PERIOD)) {
